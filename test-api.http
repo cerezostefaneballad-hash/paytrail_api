@@ -1,0 +1,28 @@
+### Login
+POST http://127.0.0.1:8000/api/login
+Content-Type: application/json
+
+{
+    "username": "admin",
+    "password": "admin123"
+}
+
+### Get Students (copy token from above response)
+GET http://127.0.0.1:8000/api/students
+Authorization: Bearer 4|WQHhN5NS58CapuyVqXPt17e3YPcfAUWUd2XVS1gUff3f212e
+
+### Create Student
+POST http://127.0.0.1:8000/api/students
+Content-Type: application/json
+Authorization: Bearer 4|WQHhN5NS58CapuyVqXPt17e3YPcfAUWUd2XVS1gUff3f212e
+
+{
+    "student_id": "2023-10325",
+    "first_name": "Juan",
+    "last_name": "Cruz",
+    "year_level": "1"
+}
+
+### Dashboard
+GET http://127.0.0.1:8000/api/dashboard
+Authorization: Bearer 4|WQHhN5NS58CapuyVqXPt17e3YPcfAUWUd2XVS1gUff3f212e
