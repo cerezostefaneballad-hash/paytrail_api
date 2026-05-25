@@ -19,4 +19,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('admins',   AdminUserController::class);
     Route::get ('/settings', [SettingController::class, 'show']);
     Route::post('/settings', [SettingController::class, 'store']);
+    Route::get('/semester-report', [SemesterReportController::class, 'index']);
 });
