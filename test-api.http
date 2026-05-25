@@ -9,20 +9,24 @@ Content-Type: application/json
 
 ### Get Students (copy token from above response)
 GET http://127.0.0.1:8000/api/students
-Authorization: Bearer 4|WQHhN5NS58CapuyVqXPt17e3YPcfAUWUd2XVS1gUff3f212e
+Authorization: 25|9X4OhNgveg2vOXIs0KJbVQUVlBk3OBqbkgxaq669a6df22d3
 
 ### Create Student
 POST http://127.0.0.1:8000/api/students
 Content-Type: application/json
-Authorization: Bearer 4|WQHhN5NS58CapuyVqXPt17e3YPcfAUWUd2XVS1gUff3f212e
 
 {
-    "student_id": "2023-10325",
-    "first_name": "Juan",
-    "last_name": "Cruz",
-    "year_level": "1"
+    "student_id": "22-10293",
+    "first_name": "Amy",
+    "middle_name": "Rivera",
+    "last_name": "Castro",
+    "year_level": "4th Year",
 }
 
 ### Dashboard
 GET http://127.0.0.1:8000/api/dashboard
 Authorization: Bearer 4|WQHhN5NS58CapuyVqXPt17e3YPcfAUWUd2XVS1gUff3f212e
+
+### Logout
+POST http://127.0.0.1:8000/api/logout
+Authorization: Bearer 21|GYZgvKUtzAL5NWyGcrTXSql62rVTC8kXWYPOol7Q5b17455a

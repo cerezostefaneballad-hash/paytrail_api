@@ -1,6 +1,7 @@
 <?php
 namespace App\Models;
 
+use App\Models\TermBalance;
 use Illuminate\Database\Eloquent\Model;
 
 class Student extends Model
@@ -38,5 +39,32 @@ class Student extends Model
         if ($paid <= 0) return 'Unpaid';
         if ($paid >= $fee) return 'Fully Paid';
         return 'Partial';
+    }
+
+    public function termBalances()
+    {
+        return $this->hasMany(TermBalance::class);
+    }
+
+    // Get balance for a specific term
+    public function getTermBalance(string $academicYear, string $semester): ?TermBalance
+    {
+        return $this->termBalances()
+            ->where('academic_year', $academicYear)
+            ->where('semester', $semester)
+            ->first();
+    }
+
+    // Get the most recent unpaid balance (for carry-over)
+    public function getOutstandingBalanceForCarryOver(): float
+    {
+        $latestTerm = $this->termBalances()
+            ->where('status', '!=', 'Fully Paid')
+            ->where('outstanding_balance', '>', 0)
+            ->latest('academic_year')
+            ->latest('semester')
+            ->first();
+        
+        return $latestTerm ? $latestTerm->outstanding_balance : 0;
     }
 }
