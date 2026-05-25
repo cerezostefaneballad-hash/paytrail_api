@@ -7,6 +7,7 @@ use App\Models\Student;
 use App\Models\TermBalance;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use App\Http\Controllers\Api\SemesterReportController;
 
 class SemesterReportController extends Controller
 {

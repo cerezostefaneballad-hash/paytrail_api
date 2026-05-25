@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\SemesterReportController;
 
 // Public
 Route::post('/login', [AuthController::class, 'login']);
