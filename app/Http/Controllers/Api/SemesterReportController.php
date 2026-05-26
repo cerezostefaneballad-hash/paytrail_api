@@ -12,7 +12,14 @@ class SemesterReportController extends Controller
     {
         try {
             $academicYear = $request->get('academic_year');
-            $semester = $request->get('semester');
+            $semester     = $request->get('semester');
+
+            $availableYears = TermBalance::distinct()
+                ->whereNotNull('academic_year')
+                ->pluck('academic_year')
+                ->unique()
+                ->values()
+                ->toArray();
 
             $query = TermBalance::with('student');
 
@@ -24,68 +31,60 @@ class SemesterReportController extends Controller
             }
 
             $termBalances = $query->get();
-            
-            // Get available years for filter
-            $availableYears = TermBalance::distinct()
-                ->pluck('academic_year')
-                ->filter()
+
+            $report = $termBalances
+                ->filter(fn($tb) => $tb->student !== null)
+                ->map(function ($tb) {
+                    $totalPayable = (float) ($tb->total_payable ?? 0);
+                    $totalPaid    = (float) ($tb->total_paid   ?? 0);
+                    $outstanding  = max(0, $totalPayable - $totalPaid);
+
+                    // payment_breakdown is already cast to array by the model
+                    $breakdown   = is_array($tb->payment_breakdown)
+                        ? $tb->payment_breakdown
+                        : [];
+
+                    // Carry-over entry is the first item in breakdown with type 'carry_over'
+                    $carryEntry    = collect($breakdown)->firstWhere('type', 'carry_over');
+                    $hasCarryOver  = $carryEntry !== null;
+                    $carriedAmount = $hasCarryOver
+                        ? (float) ($carryEntry['carried_amount'] ?? 0)
+                        : 0.0;
+
+                    return [
+                        'student_id'          => $tb->student->student_id ?? '',
+                        'full_name'           => $tb->student->full_name  ?? '',
+                        'year_level'          => $tb->student->year_level ?? '',
+                        'total_payable'       => $totalPayable,
+                        'total_paid'          => $totalPaid,
+                        'outstanding_balance' => $outstanding,
+                        'status'              => $tb->status ?? 'Unpaid',
+                        'has_carry_over'      => $hasCarryOver,
+                        'carried_amount'      => $carriedAmount,
+                    ];
+                })
                 ->values()
                 ->toArray();
 
-            $report = [];
-            foreach ($termBalances as $tb) {
-                // Skip if student doesn't exist
-                if (!$tb->student) {
-                    continue;
-                }
-
-                // Safely handle payment_breakdown
-                $paymentBreakdown = is_array($tb->payment_breakdown) 
-                    ? $tb->payment_breakdown 
-                    : json_decode($tb->payment_breakdown, true) ?? [];
-
-                $hasCarryOver = isset($paymentBreakdown[0]['type']) 
-                    && $paymentBreakdown[0]['type'] === 'carry_over';
-
-                $report[] = [
-                    'student_id' => $tb->student->student_id ?? '',
-                    'full_name' => $tb->student->full_name ?? '',
-                    'year_level' => $tb->student->year_level ?? '',
-                    // Cast to float explicitly
-                    'total_payable' => (float) ($tb->total_payable ?? 0),
-                    'total_paid' => (float) ($tb->total_paid ?? 0),
-                    'outstanding_balance' => (float) ($tb->outstanding_balance ?? 0),
-                    'status' => $tb->status ?? 'Not Enrolled',
-                    'has_carry_over' => $hasCarryOver,
-                    'carried_amount' => (float) ($paymentBreakdown[0]['carried_amount'] ?? 0),
-                ];
-            }
-
-            // Calculate summary with explicit float casting
-            $totalCollected = 0.0;
-            $totalReceivable = 0.0;
-            
-            foreach ($report as $item) {
-                $totalCollected += $item['total_paid'];
-                $totalReceivable += $item['total_payable'];
-            }
+            $totalCollected  = array_sum(array_column($report, 'total_paid'));
+            $totalReceivable = array_sum(array_column($report, 'total_payable'));
 
             return response()->json([
-                'success' => true,
+                'success'         => true,
                 'available_years' => $availableYears,
-                'report' => $report,
-                'summary' => [
-                    'total_students' => count($report),
-                    'total_collected' => $totalCollected,
+                'report'          => $report,
+                'summary'         => [
+                    'total_students'   => count($report),
+                    'total_collected'  => $totalCollected,
                     'total_receivable' => $totalReceivable,
-                ]
+                ],
             ]);
 
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Error fetching report',
-                'error' => $e->getMessage()
+                'error'   => $e->getMessage(),
             ], 500);
         }
     }

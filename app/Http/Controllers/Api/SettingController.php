@@ -14,80 +14,90 @@ class SettingController extends Controller
     {
         return Setting::latest()->first();
     }
-    
-    public function store(Request $r)
-    {
-        $data = $r->validate([
-            'acad_year'     => 'required',
-            'semester'      => 'required',
-            'semestral_fee' => 'required|numeric',
-        ]);
 
-        // Before saving the new term, compute each student's outstanding
-        // balance from the current term and carry it forward.
-        // Payment slots are reset so the new term starts clean.
-        $prevSetting = Setting::latest()->first();
+public function store(Request $r)
+{
+    $data = $r->validate([
+        'acad_year'     => 'required',
+        'semester'      => 'required',
+        'semestral_fee' => 'required|numeric',
+    ]);
 
-        if ($prevSetting) {
-            $prevFee = (float) $prevSetting->semestral_fee;
+    $prevSetting = Setting::latest()->first();
 
-            \App\Models\Student::all()->each(function ($student) use ($prevFee) {
-                $totalPayable = $prevFee + (float) $student->carried_over_balance;
-                $totalPaid    = (float) $student->first_amount
-                            + (float) $student->second_amount
-                            + (float) $student->third_amount;
-                $outstanding  = max(0, $totalPayable - $totalPaid);
+    if ($prevSetting) {
+        $prevFee = (float) $prevSetting->semestral_fee;
 
-                $student->update([
-                    'carried_over_balance' => $outstanding,
-                    'first_amount'  => 0, 'first_date'  => null,
-                    'second_amount' => 0, 'second_date' => null,
-                    'third_amount'  => 0, 'third_date'  => null,
-                ]);
-            });
-        }
+        Student::all()->each(function ($student) use ($prevSetting, $prevFee) {
+            $totalPayable = $prevFee + (float) $student->carried_over_balance;
+            $totalPaid    = (float) $student->first_amount
+                          + (float) $student->second_amount
+                          + (float) $student->third_amount;
+            $outstanding  = max(0, $totalPayable - $totalPaid);
 
-        return Setting::create($data);
-}
+            // Save the closing term balance record before resetting
+            $existing = TermBalance::where('student_id', $student->id)
+                ->where('academic_year', $prevSetting->acad_year)
+                ->where('semester', $prevSetting->semester)
+                ->first();
 
-    private function carryOverBalances(string $oldYear, string $oldSemester, string $newYear, string $newSemester, float $newFee): void
-    {
-        $students = Student::all();
-
-        foreach ($students as $student) {
-            $oldTermBalance = $student->getTermBalance($oldYear, $oldSemester);
-            
-            if ($oldTermBalance && $oldTermBalance->outstanding_balance > 0) {
-                // Create new term balance with carried-over balance as starting point
-                // The outstanding balance becomes the total_payable for the new term
-                TermBalance::create([
-                    'student_id' => $student->id,
-                    'academic_year' => $newYear,
-                    'semester' => $newSemester,
-                    'total_payable' => $oldTermBalance->outstanding_balance + $newFee,
-                    'total_paid' => 0,
-                    'payment_breakdown' => [
-                        [
-                            'type' => 'carry_over',
-                            'from_term' => "$oldYear - $oldSemester",
-                            'carried_amount' => $oldTermBalance->outstanding_balance,
-                            'new_semester_fee' => $newFee,
-                            'date' => now()->toDateString()
-                        ]
-                    ],
-                    'status' => 'Unpaid'
+            if ($existing) {
+                $existing->update([
+                    'total_paid' => $totalPaid,
+                    'status'     => $totalPaid <= 0 ? 'Unpaid'
+                                  : ($totalPaid >= $totalPayable ? 'Fully Paid' : 'Partial'),
                 ]);
             } else {
-                // No outstanding balance, just create with new fee
                 TermBalance::create([
-                    'student_id' => $student->id,
-                    'academic_year' => $newYear,
-                    'semester' => $newSemester,
-                    'total_payable' => $newFee,
-                    'total_paid' => 0,
-                    'status' => 'Unpaid'
+                    'student_id'    => $student->id,
+                    'academic_year' => $prevSetting->acad_year,
+                    'semester'      => $prevSetting->semester,
+                    'total_payable' => $totalPayable,
+                    'total_paid'    => $totalPaid,
+                    'status'        => $totalPaid <= 0 ? 'Unpaid'
+                                     : ($totalPaid >= $totalPayable ? 'Fully Paid' : 'Partial'),
                 ]);
             }
-        }
+
+            // Reset payment slots on student and carry outstanding forward
+            $student->update([
+                'carried_over_balance' => $outstanding,
+                'first_amount'  => 0, 'first_date'  => null,
+                'second_amount' => 0, 'second_date' => null,
+                'third_amount'  => 0, 'third_date'  => null,
+            ]);
+        });
     }
+
+    // Now create TermBalance records for the NEW term for every student
+    $newFee = (float) $data['semestral_fee'];
+
+    Student::all()->each(function ($student) use ($data, $newFee) {
+        $carriedOver = (float) $student->carried_over_balance;
+
+        $breakdown = $carriedOver > 0 ? [[
+            'type'             => 'carry_over',
+            'from_term'        => ($prevSetting->acad_year ?? '') . ' - ' . ($prevSetting->semester ?? ''),
+            'carried_amount'   => $carriedOver,
+            'new_semester_fee' => $newFee,
+            'date'             => now()->toDateString(),
+        ]] : null;
+
+        TermBalance::updateOrCreate(
+            [
+                'student_id'    => $student->id,
+                'academic_year' => $data['acad_year'],
+                'semester'      => $data['semester'],
+            ],
+            [
+                'total_payable'     => $newFee + $carriedOver,
+                'total_paid'        => 0,
+                'payment_breakdown' => $breakdown,
+                'status'            => 'Unpaid',
+            ]
+        );
+    });
+
+    return Setting::create($data);
+}
 }

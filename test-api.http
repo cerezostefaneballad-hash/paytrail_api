@@ -28,5 +28,7 @@ GET http://127.0.0.1:8000/api/dashboard
 Authorization: Bearer 4|WQHhN5NS58CapuyVqXPt17e3YPcfAUWUd2XVS1gUff3f212e
 
 ### Logout
-POST http://127.0.0.1:8000/api/logout
-Authorization: Bearer 21|GYZgvKUtzAL5NWyGcrTXSql62rVTC8kXWYPOol7Q5b17455a
+
+POST http://127.0.0.1:8000/api/seed-term-balances
+Authorization: Bearer 6|upyH3ibj3lXxph6XRwqYdlLpj1Lz0zt3Ad7vlE9Wca7f8343
+Accept: application/json
