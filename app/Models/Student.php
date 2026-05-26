@@ -6,13 +6,21 @@ use Illuminate\Database\Eloquent\Model;
 
 class Student extends Model
 {
+    // Add 'carried_over_balance' to $fillable
     protected $fillable = [
         'student_id', 'first_name', 'middle_name', 'last_name', 'year_level',
         'first_amount', 'first_date',
         'second_amount', 'second_date',
         'third_amount', 'third_date',
         'semester', 'acad_year', 'issued_by',
+        'carried_over_balance', // ← add this
     ];
+
+    public function getBalanceAttribute(): float
+    {
+        $fee = Setting::latest()->first()->semestral_fee ?? 0;
+        return max(0, $fee + $this->carried_over_balance - $this->total_paid);
+    }
 
     protected $appends = ['full_name', 'total_paid', 'balance', 'status'];
 
@@ -26,18 +34,13 @@ class Student extends Model
         return (float) ($this->first_amount + $this->second_amount + $this->third_amount);
     }
 
-    public function getBalanceAttribute(): float
-    {
-        $fee = Setting::latest()->first()->semestral_fee ?? 0;
-        return max(0, $fee - $this->total_paid);
-    }
-
     public function getStatusAttribute(): string
     {
-        $fee = Setting::latest()->first()->semestral_fee ?? 0;
-        $paid = $this->total_paid;
+        $fee         = Setting::latest()->first()->semestral_fee ?? 0;
+        $totalPayable = $fee + $this->carried_over_balance;
+        $paid        = $this->total_paid;
         if ($paid <= 0) return 'Unpaid';
-        if ($paid >= $fee) return 'Fully Paid';
+        if ($paid >= $totalPayable) return 'Fully Paid';
         return 'Partial';
     }
 

@@ -29,6 +29,7 @@ return new class extends Migration
             $table->string('semester')->nullable();      // '1st sem' / '2nd sem'
             $table->string('acad_year')->nullable();     // e.g. '2025-2026'
             $table->string('issued_by')->nullable();     // admin username
+            $table->decimal('carried_over_balance', 10, 2)->default(0);
 
             $table->timestamps();
         });

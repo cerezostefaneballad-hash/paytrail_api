@@ -14,31 +14,41 @@ class SettingController extends Controller
     {
         return Setting::latest()->first();
     }
-
-    public function store(Request $request)
+    
+    public function store(Request $r)
     {
-        $data = $request->validate([
-            'acad_year' => 'required|string',
-            'semester' => 'required|string',
-            'semestral_fee' => 'required|numeric|min:0',
+        $data = $r->validate([
+            'acad_year'     => 'required',
+            'semester'      => 'required',
+            'semestral_fee' => 'required|numeric',
         ]);
 
-        $oldSettings = Setting::latest()->first();
-        $oldYear = $oldSettings->acad_year ?? null;
-        $oldSemester = $oldSettings->semester ?? null;
+        // Before saving the new term, compute each student's outstanding
+        // balance from the current term and carry it forward.
+        // Payment slots are reset so the new term starts clean.
+        $prevSetting = Setting::latest()->first();
 
-        // Create new settings
-        $newSettings = Setting::create($data);
+        if ($prevSetting) {
+            $prevFee = (float) $prevSetting->semestral_fee;
 
-        // Check if term has changed
-        $termChanged = ($oldYear !== $data['acad_year']) || ($oldSemester !== $data['semester']);
+            \App\Models\Student::all()->each(function ($student) use ($prevFee) {
+                $totalPayable = $prevFee + (float) $student->carried_over_balance;
+                $totalPaid    = (float) $student->first_amount
+                            + (float) $student->second_amount
+                            + (float) $student->third_amount;
+                $outstanding  = max(0, $totalPayable - $totalPaid);
 
-        if ($termChanged && $oldYear && $oldSemester) {
-            $this->carryOverBalances($oldYear, $oldSemester, $data['acad_year'], $data['semester'], $data['semestral_fee']);
+                $student->update([
+                    'carried_over_balance' => $outstanding,
+                    'first_amount'  => 0, 'first_date'  => null,
+                    'second_amount' => 0, 'second_date' => null,
+                    'third_amount'  => 0, 'third_date'  => null,
+                ]);
+            });
         }
 
-        return response()->json($newSettings, 201);
-    }
+        return Setting::create($data);
+}
 
     private function carryOverBalances(string $oldYear, string $oldSemester, string $newYear, string $newSemester, float $newFee): void
     {
