@@ -21,4 +21,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get ('/settings', [SettingController::class, 'show']);
     Route::post('/settings', [SettingController::class, 'store']);
     Route::get('/report', [SemesterReportController::class, 'index']);
+    Route::post('/seed-term-balances', [SettingController::class, 'seedCurrentTerm']);
 });

@@ -100,4 +100,65 @@ public function store(Request $r)
 
     return Setting::create($data);
 }
+
+public function seedCurrentTerm()
+{
+    $setting = Setting::latest()->first();
+
+    if (!$setting) {
+        return response()->json(['message' => 'No settings found. Save settings first.'], 422);
+    }
+
+    $fee      = (float) $setting->semestral_fee;
+    $seeded   = 0;
+    $skipped  = 0;
+
+    Student::all()->each(function ($student) use ($setting, $fee, &$seeded, &$skipped) {
+        $totalPaid = (float) $student->first_amount
+                   + (float) $student->second_amount
+                   + (float) $student->third_amount;
+
+        $carriedOver  = (float) $student->carried_over_balance;
+        $totalPayable = $fee + $carriedOver;
+
+        $status = match(true) {
+            $totalPaid <= 0            => 'Unpaid',
+            $totalPaid >= $totalPayable => 'Fully Paid',
+            default                    => 'Partial',
+        };
+
+        $breakdown = $carriedOver > 0 ? [[
+            'type'             => 'carry_over',
+            'carried_amount'   => $carriedOver,
+            'new_semester_fee' => $fee,
+            'date'             => now()->toDateString(),
+        ]] : null;
+
+        $existing = TermBalance::where('student_id', $student->id)
+            ->where('academic_year', $setting->acad_year)
+            ->where('semester', $setting->semester)
+            ->first();
+
+        if ($existing) {
+            $skipped++;
+            return;
+        }
+
+        TermBalance::create([
+            'student_id'        => $student->id,
+            'academic_year'     => $setting->acad_year,
+            'semester'          => $setting->semester,
+            'total_payable'     => $totalPayable,
+            'total_paid'        => $totalPaid,
+            'payment_breakdown' => $breakdown,
+            'status'            => $status,
+        ]);
+
+        $seeded++;
+    });
+
+    return response()->json([
+        'message' => "Done. Seeded: $seeded, Skipped (already existed): $skipped",
+    ]);
+}
 }
